@@ -1,8 +1,15 @@
-import machine
+from machine import UART, Pin, I2C
+from neopixel import Neopixel
 import utime
 import ssd1306
 import time
 import binascii
+
+# Initialize Neopixel RGB LEDs
+pixels = Neopixel(2, 0, 18, "GRB")
+pixels.fill((220,0,0))
+color = 0
+state = 0
 
 # Melody
 # MELODY_NOTE = [659, 659, 0, 659, 0, 523, 659, 0, 784]
@@ -11,25 +18,20 @@ import binascii
 # MELODY_DURATION = [0.15, 0.35, 0.15, 0.2]
 MELODY_NOTE = [659, 759]
 MELODY_DURATION = [0.25, 0.35]
-MELODY_NOTE_ERROR = [300, 300]
-MELODY_DURATION_ERROR = [0.50, 0.35]
 
 class finger:
     
-    sda = machine.Pin(16)
-    scl = machine.Pin(17)
-    # sda = machine.Pin(20)
-    # scl = machine.Pin(21)    
-    i2c = machine.I2C(0, sda = sda, scl = scl, freq=400000)
+    sda = Pin(16)
+    scl = Pin(17)
+    i2c = I2C(0, sda = sda, scl = scl, freq=400000)
     
     display = ssd1306.SSD1306_I2C(128, 64, i2c)
 
     fingerImage = list()
 
     Header = bytearray(b'\xef\x01\xff\xff\xff\xff')
-    uart1 = machine.UART(1, baudrate=57600, bits=8, parity=None, rxbuf= 8192, stop=2, tx=machine.Pin(4), rx=machine.Pin(5))
-    # uart1 = machine.UART(1, baudrate=57600, bits=8, parity=None, rxbuf= 8192, stop=2, tx=machine.Pin(16), rx=machine.Pin(17))
-    # def __init__(self, debug = True): 
+    uart1 = UART(1, baudrate=57600, bits=8, parity=None, rxbuf= 8192, stop=2, tx=Pin(4), rx=Pin(5))
+#     def __init__(self, debug = True): 
     def __init__(self, debug = False): 
        self.debug = debug
         
@@ -327,7 +329,6 @@ class finger:
 
     def UploadImage(self):
         print('upload image')
-        retval = True
         UploadImage = bytearray(b'\x01\x00\x03\x0a')
         checksum = sum(UploadImage).to_bytes(2,'big')
         Cmd_UploadImage = self.Header + UploadImage + bytearray(checksum)
@@ -351,84 +352,37 @@ class finger:
 
         # Read enough data to get the image portion          
         if (self.debug == True): print('Reading1')
-        try:
-            # A hard coded exception for testing reset
-            # raise MemoryError('My memory error')
-            data += self.uart1.read(31510)
-        except MemoryError:
-            retval = False
+        data += self.uart1.read(31500)
 
-        # Empty buffer of scrap data 
-        prog = 0        
+        # Empty buffer of scrap data       
         while self.uart1.any() > 0:
             if (self.debug == True): print('Scrap!')
-    #       scrap = self.uart1.read(2048)
-            try:
-                scrap = self.uart1.read(2048)
-                self.display.fill(0)
-                if (prog==0):
-                    self.display.text('Analysing.   ', 10, 24, 1)
-                    prog = 1
-                elif (prog==1):
-                    self.display.text('Analysing..  ', 10, 24, 1)
-                    prog = 2
-                elif (prog==2):
-                    self.display.text('Analysing... ', 10, 24, 1)
-                    prog = 3
-                elif (prog==3):
-                    self.display.text('Analysing....', 10, 24, 1)
-                    prog = 4
-                elif (prog==4):
-                    self.display.text('Analysing... ', 10, 24, 1)
-                    prog = 5                    
-                elif (prog==5):
-                    self.display.text('Analysing..  ', 10, 24, 1)
-                    prog = 6
-                elif (prog==6):
-                    self.display.text('Analysing.   ', 10, 24, 1)
-                    prog = 7 
-                elif (prog==7):
-                    self.display.text('Analysing    ', 10, 24, 1)
-                    prog = 0 
+            scrap = self.uart1.read(2048)
 
-                self.display.show()
+        self.fingerImage.clear()
+        end = 0
+        no = 1        
+        start = data.find(b'\xef\x01')
+        
+        while (start != -1):
+            packet = bytes()
+            end = data.find(b'\xef\x01',start + 2)            
+            # image is 80 bytes in centre of records 65 to 224
+            if no>64 and no<225:
+                packet = data[start+33:start+113]
 
-            except MemoryError:
-                retval = False
+                if (self.debug == True): print('No: {0} '.format(no),binascii.hexlify(packet),"   ", len(packet))
+                high = packet[0]>>4
+                low = packet[0]&0x0F
+                expandedPacket = bytearray([high]) + bytearray([low])
+                for i in range(79):
+                    high = packet[i]>>4
+                    low = packet[i]&0x0F
+                    expandedPacket = expandedPacket + bytearray([high]) + bytearray([low])
+                self.fingerImage.append(expandedPacket)                                   
 
-        if (retval == True): 
-            self.display.fill(0)       
-            self.display.text('Generating', 10, 24, 1)            
-            self.display.text('unique code', 10, 34, 1)
-            self.display.show()
-
-            self.fingerImage.clear()
-            end = 0
-            no = 1        
-            start = data.find(b'\xef\x01')
-            
-            while (start != -1):
-                packet = bytes()
-                end = data.find(b'\xef\x01',start + 2)            
-                # image is 80 bytes in centre of records 65 to 224
-                if no>64 and no<225:
-                    packet = data[start+33:start+113]
-
-                    if (self.debug == True): print('No: {0} '.format(no),binascii.hexlify(packet),"   ", len(packet))
-                    high = packet[0]>>4
-                    low = packet[0]&0x0F
-                    expandedPacket = bytearray([high]) + bytearray([low])
-                    for i in range(79):
-                        high = packet[i]>>4
-                        low = packet[i]&0x0F
-                        expandedPacket = expandedPacket + bytearray([high]) + bytearray([low])
-                    self.fingerImage.append(expandedPacket)                                   
-                start = end
-                no +=1
-        else:
-            print('data Try Caught MemoryError')
-
-        return retval
+            start = end
+            no +=1
 
 
     def PrintImage(self):
@@ -451,14 +405,30 @@ class finger:
                     if i[(x-1)*2] > 9: self.display.pixel(x+20, y, 1) 
         self.display.show()
 
-        # Generate unique code...
+#       Generate unique code...
         code = 0        
         for i in self.fingerImage:
             for x in range(80):
                 code = code + i[(x-1)]*256 + i[(x-1)*2]
         print('code = ',code)
-        # Range +/- 1000000                
+# Range +/- 1000000                
         code2 = (code % 2000000)-1000000
+
+#         zeros =''
+#         if code2 < 1000000:
+#             zeros = '0'
+#         if code2 < 100000:
+#             zeros = '00'
+#         if code2 < 10000:
+#             zeros = '000'
+#         if code2 < 1000:
+#             zeros = '0000'
+#         if code2 < 100:
+#             zeros = '0000'
+#         if code2 < 10:
+#             zeros = '00000'
+#    
+#         self.display.text(zeros+str(code2), 30, 56, 1)
         self.display.text(str(code2), 30, 56, 1)
         self.display.show()
         
@@ -570,8 +540,10 @@ class finger:
         return(0)
 
 # Start of code...
+button1 = machine.Pin(06, machine.Pin.IN, machine.Pin.PULL_DOWN)
+button2 = machine.Pin(20, machine.Pin.IN)
 
-beeper = machine.PWM(machine.Pin(26))
+beeper = machine.PWM(Pin(22))
 
 a = finger()
 
@@ -582,14 +554,61 @@ while True:
     a.display.text('on sensor', 20, 34, 1)
     a.display.show()
 
-    # Wait for finger press
+
+    # Animate RGB LEDs
     while not a.IsPressFinger():
+        if state == 0:
+            if color < 0x101010:
+                color += 0x010101   # increase rgb colors to 0x10 each
+            else:
+                state += 1
+        elif state == 1:
+            if (color & 0x00FF00) > 0:
+                color -= 0x000100   # decrease green to zero
+            else:
+                state += 1
+        elif state == 2:
+            if (color & 0xFF0000) > 0:
+                color -= 0x010000   # decrease red to zero
+            else:
+                state += 1
+        elif state == 3:
+            if (color & 0x00FF00) < 0x1000:
+                color += 0x000100   # increase green to 0x10
+            else:
+                state += 1
+        elif state == 4:
+            if (color & 0x0000FF) > 0:
+                color -= 1          # decrease blue to zero
+            else:
+                state += 1
+        elif state == 5:
+            if (color & 0xFF0000) < 0x100000:
+                color += 0x010000   # increase red to 0x10
+            else:
+                state += 1
+        elif state == 6:
+            if (color & 0x00FF00) > 0:
+                color -= 0x000100   # decrease green to zero
+            else:
+                state += 1
+        elif state == 7:
+            if (color & 0x00FFFF) < 0x001010:
+                color += 0x000101   # increase gb to 0x10
+            else:
+                state = 1
+        pixels.fill((color & 0x0000FF, (color & 0x00FF00)/256,(color & 0xFF0000)/(256*256) ))  # fill the color on both RGB LEDs
+        pixels.show()
         utime.sleep(0.01)
+
+    color = 0x003555
+    pixels.fill((color & 0x0000FF, (color & 0x00FF00)/256,(color & 0xFF0000)/(256*256) ))  # fill the color on both RGB LEDs
+    pixels.show()
 
     a.display.fill(0)
     a.display.text('Release finger', 10, 24, 1)
     a.display.show() 
-    
+
     for i in range(len(MELODY_NOTE)):
         # Play melody tones
         if (MELODY_NOTE[i] > 0):
@@ -600,39 +619,22 @@ while True:
         utime.sleep(MELODY_DURATION[i])
     beeper.deinit()
 
-    # Wait for finger lift
-    while a.IsPressFinger():
-        utime.sleep(0.01)
-
     a.display.fill(0)
-    a.display.text('Reading data', 10, 24, 1)
+    a.display.text('Processing...', 10, 24, 1)
     a.display.show()
     
-    if (a.UploadImage() == True):
-        a.Display()      
-    else:
-        a.display.fill(0)
-        a.display.text('Ooops!', 40, 0, 1)
-        a.display.text('I had a problem', 0, 24, 1)
-        a.display.show()
+    a.UploadImage()
 
-        for i in range(len(MELODY_NOTE_ERROR)):
-            # Play melody tones
-            if (MELODY_NOTE_ERROR[i] > 0):
-                beeper.freq(MELODY_NOTE_ERROR[i])
-                beeper.duty_u16(2512)
-            else:
-                beeper.deinit()
-            utime.sleep(MELODY_DURATION_ERROR[i])
-        beeper.deinit()
+    color = 0x005500
+    pixels.fill((color & 0x0000FF, (color & 0x00FF00)/256,(color & 0xFF0000)/(256*256) ))  # fill the color on both RGB LEDs
+    pixels.show()        
 
-        # Wait then hard reset
-        time.sleep(3)
-        machine.reset()
+    a.Display()
     
-    # Wait for next person
-    while not a.IsPressFinger():
+    while ((button2.value() == 1) and (button1.value() == 0)):
         utime.sleep(0.1)
     
+    color = 0
+    state = 0
 
         

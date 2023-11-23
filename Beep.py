@@ -2,8 +2,14 @@ from machine import Pin, PWM
 import utime
 
 # Melody
-MELODY_NOTE = [659, 759, 0, 659]
-MELODY_DURATION = [0.15, 0.35, 0.15, 0.2]
+# MELODY_NOTE = [659, 759, 0, 659]
+# MELODY_DURATION = [0.15, 0.35, 0.15, 0.2]
+# MELODY_NOTE = [659, 659, 0, 659, 0, 523, 659, 0, 784]
+# MELODY_DURATION = [0.25, 0.25, 0.15, 0.25, 0.25, 0.15, 0.25, 0.15, 0.3]
+# MELODY_NOTE = [659, 759, 0, 659]
+# MELODY_DURATION = [0.15, 0.35, 0.15, 0.2]
+MELODY_NOTE = [300, 300]
+MELODY_DURATION = [0.50, 0.35]
 
 beeper = PWM(Pin(22))
 # beeper.freq(500)
