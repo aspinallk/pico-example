@@ -3,7 +3,6 @@ import utime
 import ssd1306
 import time
 import binascii
-import framebuf
 
 # Melody
 # MELODY_NOTE = [659, 659, 0, 659, 0, 523, 659, 0, 784]
@@ -24,25 +23,6 @@ class finger:
     i2c = machine.I2C(0, sda = sda, scl = scl, freq=400000)
     
     display = ssd1306.SSD1306_I2C(128, 64, i2c)
-
-    # draw another FrameBuffer on top of the current one at the given coordinates
-
-    fbuf = framebuf.FrameBuffer(bytearray(17 * 17 * 1), 17, 17, framebuf.MONO_VLSB)
-    fbuf.fill_rect(0, 0, 15, 16, 1)
-    fbuf.fill_rect(0, 0, 2, 1, 0)
-    fbuf.fill_rect(0, 1, 1, 1, 0)
-    fbuf.fill_rect(2, 3, 3, 3, 0)
-    fbuf.fill_rect(10, 0, 5, 2, 0)
-    fbuf.fill_rect(8, 2, 7, 2, 0)
-    fbuf.fill_rect(12, 4, 3, 2, 0)
-    fbuf.fill_rect(6, 6, 9, 2, 0)
-    fbuf.fill_rect(9, 8, 6, 2, 0)
-    fbuf.fill_rect(11, 10, 4, 2, 0)
-    fbuf.fill_rect(8, 12, 7, 2, 0)
-    fbuf.fill_rect(14, 15, 1, 1, 0)
-    fbuf.fill_rect(1, 14, 2, 2, 0)
-    fbuf.fill_rect(5, 14, 2, 2, 0)
-
 
     fingerImage = list()
 
@@ -597,20 +577,14 @@ a = finger()
 
 while True:        
     print('Place Finger')
+    a.display.fill(0)
+    a.display.text('Place finger', 20, 24, 1)
+    a.display.text('on sensor', 20, 34, 1)
+    a.display.show()
+
     # Wait for finger press
-    i=0
     while not a.IsPressFinger():
-        a.display.fill(0)
-        a.display.text('Place finger', 20, 20, 1)
-        a.display.text('on sensor', 20, 30, 1)
-        # Display walking ghost (no need for wait as these slow down the loop)
-        a.display.blit(a.fbuf, 128-i, 45, 0)
-        a.display.blit(a.fbuf, 150-i, 45, 0)
-        a.display.blit(a.fbuf, 190-i, 45, 0)
-        a.display.show()
-        i=i+1
-        if(i==206): i=0
-        # utime.sleep(0.005)
+        utime.sleep(0.01)
 
     a.display.fill(0)
     a.display.text('Release finger', 10, 24, 1)
@@ -657,15 +631,8 @@ while True:
         machine.reset()
     
     # Wait for next person
-    c=99
-    while ((not a.IsPressFinger()) and (c>0)):
-        b = str(c)
-        if (c<10):b=" "+b
-        c=c-1
-        a.display.fill_rect(110, 5, 20, 10, 0)
-        a.display.text(b, 110, 5, 1)
-        a.display.show()
-        utime.sleep(0.9)
+    while not a.IsPressFinger():
+        utime.sleep(0.1)
     
 
         
